@@ -21,7 +21,9 @@
 
 #include "qbrotliencoder.h"
 #include <QIODevice>
-#include "brotli.h"
+#include "../brotli/enc/encode.h"
+
+#define BUFFER_SIZE 4096
 
 QBrotliEncoder::QBrotliEncoder(QObject *parent) : QObject(parent)
 {
@@ -34,13 +36,13 @@ QBrotliEncoder::~QBrotliEncoder()
 
 }
 
-void QBrotliEncoder::setIO(QIODevice *in, QIODevice* out)
+void QBrotliEncoder::init(QIODevice *in, QIODevice* out)
 {
     m_pInputDevice = in;
     m_pOutputDevice = out;
 }
 
-void QBrotliEncoder::decode()
+void QBrotliEncoder::encode(int quality)
 {
     if (m_pInputDevice == nullptr || m_pOutputDevice == nullptr)
     {
@@ -48,59 +50,63 @@ void QBrotliEncoder::decode()
         return;
     }
 
-    if (m_pInputDevice->isReadable())
+    if (!m_pInputDevice->isReadable())
     {
         emit onError("Input not readable.");
         return;
     }
 
-    if (m_pOutputDevice->isWritable())
+    if (!m_pOutputDevice->isWritable())
     {
         emit onError("Output not writeable.");
         return;
     }
 
-
-    BrotliState state;
     qint64 totalsize=-1;
-    BrotliParams params;
+
+    brotli::BrotliParams params;
+    params.quality = quality;
 
     if (!m_pInputDevice->isSequential())
-        total_size = m_pInputDevice->size();
+        totalsize = m_pInputDevice->size();
 
-    BrotliStateInit(&state);
+    size_t in_bytes = 0;
+    size_t out_bytes = 0;
+    uint8_t* input = new uint8_t[BUFFER_SIZE];
+    uint8_t* output;
+    bool final_block = false;
+    brotli::BrotliCompressor compressor(params);
 
-    int finish = 0;
-    BrotliResult r;
+    while (!final_block) {
+      qint64 read = m_pInputDevice->read(reinterpret_cast<char*>(input),BUFFER_SIZE);
+      if (read == -1)
+      {
+          emit onError("Read error.");
+          break;
+      }
+      in_bytes = read;
+      compressor.CopyInputToRingBuffer(in_bytes,input);
+      final_block = in_bytes == 0 || m_pInputDevice->atEnd();
+      out_bytes = 0;
+      if (!compressor.WriteBrotliData(final_block,
+                                      /* force_flush = */ false,
+                                      &out_bytes, &output)) {
+          //error
+          emit onError("Decoding error.");
+          break;
+      }
+      if (out_bytes > 0 && m_pOutputDevice->write(reinterpret_cast<const char*>(output),out_bytes) != out_bytes) {
+          //error
+          emit onError("Write error.");
+          break;
+      }
 
-    BrotliInput input = initInput(m_pInputDevice);
-    BrotliOutput output = initOutput(m_pOutputDevice);
+      if (totalsize!=-1)
+          emit onProgress((double)m_pInputDevice->pos()/(double)totalsize);
+    }
 
-    /*for (;;)
-    {
-        r = BrotliCompress(input,output,finish,&state);
-        if (r==0)
-        {
-            //error
-            emit onError("Decoding error.");
-            break;
-        }
-        else if (r==1)
-        {
-            //done
-            break;
-        }
-
-        if (totalsize!=-1)
-            emit onProgress(m_pInputDevice->pos()/totalsize);
-
-
-        if (m_pInputDevice->atEnd())
-            finish=1;
-    }*/
+    delete [] input;
 
     emit onProgress(1.0);
     emit onDone();
-
-    BrotliStateCleanup(&state);
 }

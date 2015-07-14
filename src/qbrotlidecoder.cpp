@@ -21,7 +21,37 @@
 
 #include "qbrotlidecoder.h"
 #include <QIODevice>
-#include "brotli.h"
+#include "../brotli/dec/decode.h"
+
+int QIOInputFunction(void* data, uint8_t* buf, size_t count)
+{
+    QIODevice* io = static_cast<QIODevice*>(data);
+    if (io->atEnd())
+        return 0;
+    return io->read(reinterpret_cast<char*>(buf),count);
+}
+
+BrotliInput initInput(QIODevice* input)
+{
+    BrotliInput b;
+    b.cb_ = &QIOInputFunction;
+    b.data_ = input;
+    return b;
+}
+
+int QIOOutputFunction(void* data, const uint8_t* buf, size_t count)
+{
+    QIODevice* io = static_cast<QIODevice*>(data);
+    return io->write(reinterpret_cast<const char*>(buf),count);
+}
+
+BrotliOutput initOutput(QIODevice* output)
+{
+    BrotliOutput b;
+    b.cb_ = &QIOOutputFunction;
+    b.data_ = output;
+    return b;
+}
 
 QBrotliDecoder::QBrotliDecoder(QObject *parent) : QObject(parent)
 {
@@ -34,7 +64,7 @@ QBrotliDecoder::~QBrotliDecoder()
 
 }
 
-void QBrotliDecoder::setIO(QIODevice *in, QIODevice* out)
+void QBrotliDecoder::init(QIODevice *in, QIODevice* out)
 {
     m_pInputDevice = in;
     m_pOutputDevice = out;
@@ -48,13 +78,13 @@ void QBrotliDecoder::decode()
         return;
     }
 
-    if (m_pInputDevice->isReadable())
+    if (!m_pInputDevice->isReadable())
     {
         emit onError("Input not readable.");
         return;
     }
 
-    if (m_pOutputDevice->isWritable())
+    if (!m_pOutputDevice->isWritable())
     {
         emit onError("Output not writeable.");
         return;
@@ -65,7 +95,7 @@ void QBrotliDecoder::decode()
     qint64 totalsize=-1;
 
     if (!m_pInputDevice->isSequential())
-        total_size = m_pInputDevice->size();
+        totalsize = m_pInputDevice->size();
 
     BrotliStateInit(&state);
 
@@ -91,7 +121,7 @@ void QBrotliDecoder::decode()
         }
 
         if (totalsize!=-1)
-            emit onProgress(m_pInputDevice->pos()/totalsize);
+            emit onProgress((double)m_pInputDevice->pos()/(double)totalsize);
 
 
         if (m_pInputDevice->atEnd())

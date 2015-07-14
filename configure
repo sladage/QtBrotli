@@ -1,0 +1,6 @@
+#!/bin/bash
+
+echo "Cloning brotli repo"
+git clone https://github.com/google/brotli.git
+echo "Renaming streams.cc"
+mv brotli/enc/streams.cc brotli/enc/encstreams.cc

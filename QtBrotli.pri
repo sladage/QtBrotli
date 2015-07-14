@@ -1,6 +1,7 @@
+CONFIG += c++11
+
 SOURCES += $$PWD/src/qbrotliencoder.cpp\
         $$PWD/src/qbrotlidecoder.cpp \
-    $$PWD/brotli/enc/streams.cc \
     $$PWD/brotli/enc/static_dict.cc \
     $$PWD/brotli/enc/metablock.cc \
     $$PWD/brotli/enc/literal_cost.cc \
@@ -17,7 +18,7 @@ SOURCES += $$PWD/src/qbrotliencoder.cpp\
     $$PWD/brotli/dec/huffman.c \
     $$PWD/brotli/dec/decode.c \
     $$PWD/brotli/dec/bit_reader.c \
-    $$PWD/src/brotli.cpp
+    $$PWD/brotli/enc/encstreams.cc
 
 HEADERS  += $$PWD/src/qbrotliencoder.h\
         $$PWD/src/qbrotlidecoder.h \
@@ -58,5 +59,6 @@ HEADERS  += $$PWD/src/qbrotliencoder.h\
     $$PWD/brotli/dec/dictionary.h \
     $$PWD/brotli/dec/decode.h \
     $$PWD/brotli/dec/context.h \
-    $$PWD/brotli/dec/bit_reader.h \
-    $$PWD/src/brotli.h
+    $$PWD/brotli/dec/bit_reader.h
+
+INCLUDEPATH += $$PWD/src
